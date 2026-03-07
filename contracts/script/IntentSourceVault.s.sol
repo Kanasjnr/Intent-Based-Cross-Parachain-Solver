@@ -7,14 +7,16 @@ import {IntentSourceVault} from "../src/IntentSourceVault.sol";
 
 contract DeployVault is Script {
     function run() external {
-        // This will use the account provided via --private-key, --interactive, or --account
+        // Reads from --private-key or --interactive or --account
         vm.startBroadcast();
 
-        console2.log("Deploying IntentSourceVault...");
+        address treasury = vm.envAddress("TREASURY_ADDRESS");
+
+        console2.log("Deploying IntentSourceVault with treasury:", treasury);
 
         // Deploy the Vault
-        IntentSourceVault vault = new IntentSourceVault();
-        
+        IntentSourceVault vault = new IntentSourceVault(treasury);
+
         console2.log("Vault Deployed to:", address(vault));
 
         vm.stopBroadcast();
