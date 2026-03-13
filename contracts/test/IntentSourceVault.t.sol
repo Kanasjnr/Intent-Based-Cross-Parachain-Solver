@@ -30,8 +30,8 @@ contract IntentSourceVaultTest is Test {
         MockXcm mockXcm = new MockXcm();
         vm.etch(XCM_PRECOMPILE_ADDRESS, address(mockXcm).code);
 
-        vault = new IntentSourceVault(treasury);
         token = new MockERC20("Test Token", "TEST");
+        vault = new IntentSourceVault(treasury, address(token));
 
         // Whitelist this contract/address as a solver for testing
         vault.setSolverWhitelist(address(this), true);
@@ -133,7 +133,7 @@ contract IntentSourceVaultTest is Test {
 
         bytes memory signature = _signIntent(intent);
 
-        vm.expectRevert("Intent: expired");
+        vm.expectRevert("Vault: intent expired");
         vm.prank(user);
         vault.lockIntent(intent, signature);
     }
@@ -158,15 +158,37 @@ contract IntentSourceVaultTest is Test {
 
         bytes32 intentHash = _getIntentHash(intent);
 
-        vm.prank(solver);
+        // Solver must have a bond to settle
+        token.mint(solver, 100 ether);
+        vm.startPrank(solver);
+        token.approve(address(vault), 100 ether);
+        vault.depositBond(10 ether);
+
         vault.settleIntent(intent, "mock_proof");
+        vm.stopPrank();
 
         uint256 expectedFee = (100 ether * vault.feeBps()) / 10000;
         uint256 expectedSolverAmount = 100 ether - expectedFee;
 
-        assertEq(token.balanceOf(solver), expectedSolverAmount);
-        assertEq(token.balanceOf(treasury), expectedFee);
+        // Funds should NOT be released yet
+        // 100 ether minted - 10 ether bond = 90 ether
+        assertEq(token.balanceOf(solver), 90 ether);
         assertTrue(vault.settledIntents(intentHash));
+
+        // Attempt early finalization (should revert)
+        vm.prank(solver);
+        vm.expectRevert("Vault: challenge active");
+        vault.finalizeIntent(intent);
+
+        // Warp past challenge period
+        vm.warp(block.timestamp + 25 hours);
+
+        vm.prank(solver);
+        vault.finalizeIntent(intent);
+
+        // Final balance: 100 initial - 10 bond + 99.5 reward = 189.5 ether
+        assertEq(token.balanceOf(solver), 189.5 ether);
+        assertEq(token.balanceOf(treasury), expectedFee);
         assertEq(vault.solverReputation(solver), 1);
     }
 
@@ -188,10 +210,16 @@ contract IntentSourceVaultTest is Test {
         vm.prank(user);
         vault.lockIntent(intent, signature);
 
+        // Provide bond so we can reach the whitelist check
         address rogueSolver = address(0xbad);
-        vm.prank(rogueSolver);
-        vm.expectRevert("Vault: not a whitelisted solver");
+        token.mint(rogueSolver, 100 ether);
+        vm.startPrank(rogueSolver);
+        token.approve(address(vault), 100 ether);
+        vault.depositBond(10 ether);
+
+        vm.expectRevert("Vault: unauthorized solver");
         vault.settleIntent(intent, "mock_proof");
+        vm.stopPrank();
     }
 
     function test_Pause_RevertIf_Locked() public {
@@ -229,11 +257,15 @@ contract IntentSourceVaultTest is Test {
             extraData: ""
         });
 
-        // Skip lockIntent
+        // Provide bond first
+        token.mint(solver, 100 ether);
+        vm.startPrank(solver);
+        token.approve(address(vault), 100 ether);
+        vault.depositBond(10 ether);
 
-        vm.expectRevert("Intent: not registered");
-        vm.prank(solver);
+        vm.expectRevert("Vault: intent not found");
         vault.settleIntent(intent, "mock_proof");
+        vm.stopPrank();
     }
 
     function test_RefundIntent_Success() public {
@@ -259,5 +291,89 @@ contract IntentSourceVaultTest is Test {
         vault.refundIntent(intent);
 
         assertEq(token.balanceOf(user), 1000 ether);
+    }
+
+    function test_Bonding_Success() public {
+        token.mint(solver, 100 ether);
+        vm.startPrank(solver);
+        token.approve(address(vault), 100 ether);
+
+        vault.depositBond(10 ether);
+        assertEq(vault.solverBonds(solver), 10 ether);
+        assertEq(token.balanceOf(address(vault)), 10 ether);
+
+        vault.withdrawBond(5 ether);
+        assertEq(vault.solverBonds(solver), 5 ether);
+        vm.stopPrank();
+    }
+
+    function test_Bonding_RevertIf_BelowMinimum() public {
+        token.mint(solver, 5 ether);
+        vm.startPrank(solver);
+        token.approve(address(vault), 5 ether);
+
+        vm.expectRevert("Vault: insufficient bond amount");
+        vault.depositBond(5 ether);
+        vm.stopPrank();
+    }
+
+    function test_SettleIntent_RevertIf_InsufficientBond() public {
+        IIntentSource.Intent memory intent = IIntentSource.Intent({
+            user: user,
+            sourceAsset: address(token),
+            amount: 100 ether,
+            destChainId: 2000,
+            destRecipient: solver,
+            destAsset: address(0),
+            nonce: 0,
+            deadline: block.timestamp + 1 hours,
+            extraData: ""
+        });
+
+        bytes memory signature = _signIntent(intent);
+        vm.prank(user);
+        vault.lockIntent(intent, signature);
+
+        // Whitelisted but NO bond
+        vm.prank(solver);
+        vm.expectRevert("Vault: solver bond required");
+        vault.settleIntent(intent, "mock_proof");
+    }
+
+    function test_WithdrawBond_RevertIf_ActiveChallenge() public {
+        token.mint(solver, 100 ether);
+        vm.startPrank(solver);
+        token.approve(address(vault), 100 ether);
+        vault.depositBond(20 ether);
+
+        IIntentSource.Intent memory intent = IIntentSource.Intent({
+            user: user,
+            sourceAsset: address(token),
+            amount: 100 ether,
+            destChainId: 2000,
+            destRecipient: solver,
+            destAsset: address(0),
+            nonce: 0,
+            deadline: block.timestamp + 1 hours,
+            extraData: ""
+        });
+
+        bytes memory signature = _signIntent(intent);
+        vm.stopPrank();
+        vm.prank(user);
+        vault.lockIntent(intent, signature);
+
+        vm.prank(solver);
+        vault.settleIntent(intent, "mock_proof");
+
+        vm.prank(solver);
+        vm.expectRevert("Vault: bond locked for challenge");
+        vault.withdrawBond(10 ether);
+
+        // Warp past challenge period
+        vm.warp(block.timestamp + 25 hours);
+        vm.prank(solver);
+        vault.withdrawBond(10 ether);
+        assertEq(vault.solverBonds(solver), 10 ether);
     }
 }

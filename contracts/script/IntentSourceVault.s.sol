@@ -11,11 +11,13 @@ contract DeployVault is Script {
         vm.startBroadcast();
 
         address treasury = vm.envAddress("TREASURY_ADDRESS");
+        address bondToken = vm.envAddress("BOND_TOKEN_ADDRESS");
 
         console2.log("Deploying IntentSourceVault with treasury:", treasury);
+        console2.log("Bond token:", bondToken);
 
         // Deploy the Vault
-        IntentSourceVault vault = new IntentSourceVault(treasury);
+        IntentSourceVault vault = new IntentSourceVault(treasury, bondToken);
 
         console2.log("Vault Deployed to:", address(vault));
 
