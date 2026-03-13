@@ -14,11 +14,11 @@ import {
     SafeERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
+import {LibScale} from "./LibScale.sol";
 
 /**
  * @title IntentSourceVault
- * @notice High-security vault for handling cross-chain intents with atomic escrow.
- * @dev Implements EIP-712 and interacts with XCM precompile for cross-chain notification.
+ * @notice Vault for cross-chain intent settlement with optimistic verification.
  */
 contract IntentSourceVault is
     IIntentSource,
@@ -35,39 +35,45 @@ contract IntentSourceVault is
             "Intent(address user,address sourceAsset,uint256 amount,uint256 destChainId,address destRecipient,address destAsset,uint256 nonce,uint256 deadline,bytes extraData)"
         );
 
+    uint256 public constant CHALLENGE_PERIOD = 24 hours;
+    uint256 public constant MIN_SOLVER_BOND = 10 ether;
+    uint256 public constant MAX_FEE_BPS = 500;
+
+    address public treasury;
+    address public bondToken;
+    uint256 public feeBps = 50;
+    bool public xcmEnabled = true;
+
     mapping(bytes32 => bool) public registeredIntents;
     mapping(bytes32 => bool) public settledIntents;
     mapping(bytes32 => bool) public refundedIntents;
     mapping(address => uint256) public nonces;
     mapping(address => bool) public whitelistedSolvers;
     mapping(address => uint256) public solverReputation;
-
-    address public treasury;
-    uint256 public feeBps = 50; // 0.5% default
-    uint256 public constant MAX_FEE_BPS = 500; // 5% cap
-
-    bool public xcmEnabled = true;
+    mapping(bytes32 => uint256) public settlementTimestamp;
+    mapping(bytes32 => address) public intentSolvers;
+    mapping(address => uint256) public solverBonds;
+    mapping(address => uint256) public latestSettlementChallengeEnd;
 
     event SolverWhitelisted(address indexed solver, bool status);
     event FeeUpdated(uint256 newFeeBps);
     event TreasuryUpdated(address indexed newTreasury);
 
     modifier onlyWhitelistedSolver() {
-        require(
-            whitelistedSolvers[msg.sender],
-            "Vault: not a whitelisted solver"
-        );
+        require(whitelistedSolvers[msg.sender], "Vault: unauthorized solver");
         _;
     }
 
-    constructor(address _treasury) EIP712("PolkadotIntentProtocol", "1.0.0") {
+    constructor(
+        address _treasury,
+        address _bondToken
+    ) EIP712("PolkadotIntentProtocol", "1.0.0") {
         require(_treasury != address(0), "Vault: zero treasury");
+        require(_bondToken != address(0), "Vault: zero bond token");
         treasury = _treasury;
+        bondToken = _bondToken;
     }
 
-    /**
-     * @notice Toggle XCM notifications.
-     */
     function setXcmEnabled(bool enabled) external onlyOwner {
         xcmEnabled = enabled;
     }
@@ -100,27 +106,41 @@ contract IntentSourceVault is
         _unpause();
     }
 
-    /**
-     * @notice Emergency rescue for trapped assets.
-     */
     function rescueToken(
         address token,
         address to,
         uint256 amount
     ) external onlyOwner {
+        require(token != bondToken, "Vault: bond token protected");
         IERC20(token).safeTransfer(to, amount);
     }
 
-    /**
-     * @inheritdoc IIntentSource
-     */
+    function depositBond(uint256 amount) external nonReentrant {
+        require(amount >= MIN_SOLVER_BOND, "Vault: insufficient bond amount");
+        IERC20(bondToken).safeTransferFrom(msg.sender, address(this), amount);
+        solverBonds[msg.sender] += amount;
+    }
+
+    function withdrawBond(uint256 amount) external nonReentrant {
+        require(
+            block.timestamp > latestSettlementChallengeEnd[msg.sender],
+            "Vault: bond locked for challenge"
+        );
+        require(
+            solverBonds[msg.sender] >= amount,
+            "Vault: insufficient balance"
+        );
+        solverBonds[msg.sender] -= amount;
+        IERC20(bondToken).safeTransfer(msg.sender, amount);
+    }
+
     function lockIntent(
         Intent calldata intent,
         bytes calldata signature
     ) external override nonReentrant whenNotPaused {
-        require(intent.user == msg.sender, "Intent: user mismatch");
-        require(intent.deadline > block.timestamp, "Intent: expired");
-        require(intent.nonce == nonces[msg.sender], "Intent: invalid nonce");
+        require(intent.user == msg.sender, "Vault: user mismatch");
+        require(intent.deadline > block.timestamp, "Vault: intent expired");
+        require(intent.nonce == nonces[msg.sender], "Vault: invalid nonce");
 
         bytes32 structHash = keccak256(
             abi.encode(
@@ -139,9 +159,8 @@ contract IntentSourceVault is
 
         bytes32 hash = _hashTypedDataV4(structHash);
         address signer = hash.recover(signature);
-        require(signer == intent.user, "Intent: invalid signature");
+        require(signer == intent.user, "Vault: invalid signature");
 
-        // Atomic Escrow
         IERC20(intent.sourceAsset).safeTransferFrom(
             intent.user,
             address(this),
@@ -153,30 +172,46 @@ contract IntentSourceVault is
 
         emit IntentLocked(hash, intent);
 
-        // Optional: Notify destination chain via XCM
         if (xcmEnabled) {
             _notifyDestination(intent, hash);
         }
     }
 
-    /**
-     * @inheritdoc IIntentSource
-     */
     function settleIntent(
         Intent calldata intent,
         bytes calldata proof
     ) external override onlyWhitelistedSolver nonReentrant {
+        require(
+            solverBonds[msg.sender] >= MIN_SOLVER_BOND,
+            "Vault: solver bond required"
+        );
         bytes32 intentHash = _getIntentHash(intent);
 
-        require(registeredIntents[intentHash], "Intent: not registered");
-        require(!settledIntents[intentHash], "Intent: already settled");
-        require(!refundedIntents[intentHash], "Intent: already refunded");
+        require(registeredIntents[intentHash], "Vault: intent not found");
+        require(!settledIntents[intentHash], "Vault: already settled");
+        require(!refundedIntents[intentHash], "Vault: already refunded");
 
         _verifyFulfillmentProof(intentHash, proof);
 
         settledIntents[intentHash] = true;
+        settlementTimestamp[intentHash] = block.timestamp;
+        intentSolvers[intentHash] = msg.sender;
+        latestSettlementChallengeEnd[msg.sender] =
+            block.timestamp +
+            CHALLENGE_PERIOD;
 
-        // Revenue Management
+        emit IntentSettled(intentHash, msg.sender);
+    }
+
+    function finalizeIntent(Intent calldata intent) external nonReentrant {
+        bytes32 intentHash = _getIntentHash(intent);
+        require(settledIntents[intentHash], "Vault: not settled");
+        require(
+            block.timestamp >
+                settlementTimestamp[intentHash] + CHALLENGE_PERIOD,
+            "Vault: challenge active"
+        );
+
         uint256 fee = (intent.amount * feeBps) / 10000;
         uint256 solverAmount = intent.amount - fee;
 
@@ -184,29 +219,32 @@ contract IntentSourceVault is
             IERC20(intent.sourceAsset).safeTransfer(treasury, fee);
         }
 
-        // Release funds to solver
-        IERC20(intent.sourceAsset).safeTransfer(msg.sender, solverAmount);
-
-        solverReputation[msg.sender]++;
-
-        emit IntentSettled(intentHash, msg.sender);
+        address solver = intentSolvers[intentHash];
+        IERC20(intent.sourceAsset).safeTransfer(solver, solverAmount);
+        solverReputation[solver]++;
     }
 
-    /**
-     * @inheritdoc IIntentSource
-     */
+    function challengeIntent(
+        Intent calldata intent,
+        bytes calldata evidence
+    ) external nonReentrant {
+        // Implementation for fraud proof validation
+    }
+
     function refundIntent(
         Intent calldata intent
     ) external override nonReentrant {
-        require(block.timestamp > intent.deadline, "Intent: not expired");
+        require(
+            block.timestamp > intent.deadline,
+            "Vault: deadline not reached"
+        );
         bytes32 intentHash = _getIntentHash(intent);
 
-        require(registeredIntents[intentHash], "Intent: not registered");
-        require(!settledIntents[intentHash], "Intent: already settled");
-        require(!refundedIntents[intentHash], "Intent: already refunded");
+        require(registeredIntents[intentHash], "Vault: intent not found");
+        require(!settledIntents[intentHash], "Vault: already settled");
+        require(!refundedIntents[intentHash], "Vault: already refunded");
 
         refundedIntents[intentHash] = true;
-
         IERC20(intent.sourceAsset).safeTransfer(intent.user, intent.amount);
 
         emit IntentRefunded(intentHash);
@@ -238,45 +276,35 @@ contract IntentSourceVault is
             );
     }
 
-    /**
-     * @dev Sends an XCM notification to the destination chain.
-     * This uses the Low-Level XCM Precompile.
-     */
     function _notifyDestination(
         Intent calldata intent,
         bytes32 intentHash
     ) internal {
         if (intent.destChainId == 0) return;
 
-        // Construct SCALE-encoded MultiLocation: { parents: 1, interior: X1(Parachain(id)) }
-        // 0x01 (parents=1) | 0x01 (X1) | 0x00 (Junction=Parachain) | [uint32 ParaId LE]
         bytes memory destination = abi.encodePacked(
             uint8(1),
             uint8(1),
             uint8(0),
-            uint32(intent.destChainId) // Note: Solidity is BE, SCALE is LE. For ParaIDs < 255 it's same-ish.
+            LibScale.encodeUint32LE(uint32(intent.destChainId))
         );
 
-        bytes memory message = abi.encode(
+        bytes memory payload = abi.encode(
             intentHash,
             intent.user,
             intent.amount
         );
+        bytes memory xcmMessage = LibScale.encodeBytes(payload);
 
-        try IXcm(XCM_PRECOMPILE_ADDRESS).send(destination, message) {
-            // Success
-        } catch {
-            // Silently fail to avoid blocking source tx
-        }
+        try
+            IXcm(XCM_PRECOMPILE_ADDRESS).send(destination, xcmMessage)
+        {} catch {}
     }
 
-    /**
-     * @dev Internal hook for proof verification.
-     */
     function _verifyFulfillmentProof(
-        bytes32 /*intentHash*/,
+        bytes32,
         bytes calldata proof
     ) internal virtual {
-        require(proof.length > 0, "Intent: empty proof");
+        require(proof.length > 0, "Vault: proof required");
     }
 }
