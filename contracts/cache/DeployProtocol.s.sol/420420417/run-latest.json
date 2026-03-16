@@ -5,6 +5,15 @@
     },
     {
       "rpc": "https://services.polkadothub-rpc.com/testnet"
+    },
+    {
+      "rpc": "https://services.polkadothub-rpc.com/testnet"
+    },
+    {
+      "rpc": "https://services.polkadothub-rpc.com/testnet"
+    },
+    {
+      "rpc": "https://services.polkadothub-rpc.com/testnet"
     }
   ]
 }

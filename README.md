@@ -1,104 +1,76 @@
-# Polkadot Intent-Based Cross-Parachain Solver
+# Polkadot Intent Solver Network
 
-A modular, production-grade infrastructure protocol for **intent-based cross-parachain asset settlement** on Polkadot. Unlike monolithic dApps, this system is architected as composable infrastructure primitives—intent contracts, solver networks, and XCM settlement layers—that can be deployed independently and composed by multiple application frontends.
-
----
-
-## Executive Summary
-
-The protocol leverages Polkadot's **shared security model** and **XCM (Cross-Consensus Messaging)** to enable gasless swaps through solver competition. By moving the complexity of cross-chain routing off-chain to a specialized solver network, we eliminate liquidity fragmentation across parachains while reducing MEV exposure compared to traditional AMM architectures.
-
-### Key Differentiators:
-
-- **Shared Security:** Intent contracts inherit Polkadot's validator set; no additional trust assumptions beyond the relay chain.
-- **Native XCM Settlement:** Multi-hop cross-parachain atomicity without external bridging protocols; settlement is guaranteed by the relay chain.
-- **Modular Solver Network:** Competing solvers service intents, enabling a permissionless and efficient market.
-- **Precompile Integration:** Direct EVM-to-Polkadot runtime interaction for low-latency liquidity discovery.
+A modular infrastructure for **intent-based cross-parachain asset settlement** on Polkadot. This protocol combines the agility of Solidity with the high-performance verification of PolkaVM (PVM) to enable trustless, MEV-resistant cross-chain swaps.
 
 ---
 
-## The Problem: Liquidity Fragmentation
+## Architecture
 
-Polkadot's isolation provides scalability but fragments liquidity:
+### 1. Hybrid Hub-and-Brain Model
 
-- **HydraDX:** Omnipool depth.
-- **Acala:** Collateralized assets.
-- **Moonbeam:** Ethereum-sourced tokens.
-- **AssetHub:** Native issuance.
+- **The Hub (EVM):** `IntentExecutor.sol` acts as the single source of truth for asset custody, user escrows, and solver bonds.
+- **The Brain (PVM):** A 64-bit RISC-V verifier running in PolkaVM. It performs the "heavy lifting" (MPT proofs and price checks) off-chain/cross-VM to minimize gas and maximize security.
 
-A user swapping `DOT` on AssetHub for `USDT` on Acala currently faces manual XCM construction, multiple gas payments, and slippage risks. This protocol solves this by allowing the user to sign a **single intent message** and let solvers handle the execution.
+### 2. HydraDX EMA Price Guard
 
----
+- **MEV Protection:** The PVM verifier automatically queries the HydraDX Exponential Moving Average (EMA).
+- **Execution Policy:** Settlement is rejected if the output is less than **90%** of the reference EMA price.
+- **Outcome:** Users get a fair market price by default, even in volatile blocks.
 
-## System Architecture
+### 3. Cryptographic Surety (MPT)
 
-### 1. On-Chain (Solidity/PVM)
-
-- **`IntentSourceVault.sol`**: The core registry and escrow vault. It handles EIP-712 verification and atomic asset locking.
-- **`IIntentSource.sol`**: Standardized lifecycle interface (`lock` -> `settle` -> `refund`).
-- **`IXcm.sol`**: Low-level interface for the Polkadot XCM precompile (`0xA0000`).
-
-### 2. Off-Chain Solver Network (In Progress)
-
-- **Intent Listener**: Monitors the chain for `IntentCreated` events.
-- **Route Simulator**: Queries parachain liquidity via precompiles to find optimal routes.
-- **Execution Engine**: Dispatches XCM settlement messages to the vault.
+- **Trustless Logic:** Settlement requires a Merkle Patricia Trie (MPT) proof from the source chain's storage.
+- **Math-First:** The verifier parses the proof vector against a trusted State Root anchored on the EVM hub.
 
 ---
 
-## Security & Trust Model
+## Live Deployment (Testnet)
 
-- **EIP-712 Typed Signing:** Secure off-chain authorization for user intents.
-- **Optimistic Bonding Model:** Solvers must stake collateral to settle intents, subject to a 24-hour challenge period and withdrawal locks.
-- **Locked Escrow:** User assets are atomically escrowed and released only upon valid settlement or timeout refund.
-- **XCM Encode Safety:** SCALE-compatible encoding for reliable multi-chain communication via `LibScale`.
-
----
-
-The core on-chain layer is live:
-
-- **Vault Address:** [`0xc371f7A485fc20DA54E419B2b12eB4779C308E5e`](https://blockscout-testnet.polkadot.io/address/0xc371f7A485fc20DA54E419B2b12eB4779C308E5e)
-- **Bond Token ($PBT):** [`0x9D8519A7fCAeb7f29D53B0ddE1fAe2aF033A0035`](https://blockscout-testnet.polkadot.io/address/0x9D8519A7fCAeb7f29D53B0ddE1fAe2aF033A0035)
-- **Network:** Polkadot Hub TestNet (Chain ID: `420420417`)
-- **Status:** **Production-Hardened & Logic-Verified**
+- **Network:** Polkadot Hub Testnet (pallet-revive)
+- **Chain ID:** `420420417`
+- **EVM Executor:** [`0xc799A5a0d13d66EA168a713f5eF35206fD0839E6`](https://blockscout-testnet.polkadot.io/address/0xc799A5a0d13d66EA168a713f5eF35206fD0839E6)
+- **PVM Verifier:** [`0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA`](https://blockscout-testnet.polkadot.io/address/0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA)
+- **Token Factory:** `0x8DE75d04247Cd0707C239F5cBA9B01A5aeC65944`
+- **Mock DEX:** `0xD82eE7805A0180e22C7c827614D5e4089BDF01c4`
+- **Bond Token ($PBT):** `0x0522663853E9AaD410308f5CC175CF1702a636a4`
 
 ---
 
-## 🛠️ Development
+## Components
+
+- **`contracts/src/IntentExecutor.sol`**: Singleton registry for intent settlement.
+- **`contracts/src/TokenFactory.sol`**: Permissionless asset creator for the solver network.
+- **`contracts/pvm/src/lib.rs`**: High-performance Rust verifier (no_std, 0-heap).
+- **`solver/`**: EIP-712 intent creation and solver listeners.
+
+## Getting Started
 
 ### Prerequisites
 
-- [Foundry Nightly](https://book.getfoundry.sh/getting-started/installation.html) (Required for Polkadot Hub support)
+- **Foundry Nightly**: For `pallet-revive` and Polkadot Hub support.
+- **Rust Nightly**: For PVM compilation with `build-std`.
 
 ### Installation
 
 ```bash
-cd contracts
-npm install
+git clone https://github.com/Kanasjnr/Intent-Based-Cross-Parachain-Solver
+cd intent/contracts
 forge install
 ```
 
 ### Testing
 
 ```bash
-cd contracts
-forge test -vvv
-```
+# Verify EVM Hub
+forge test
 
-### Deployment Strategy
-
-We use **Forge Scripts** for reproducible, stateful deployments. For security, we recommend using encrypted keystores:
-
-```bash
-# Import your key securely
-cast wallet import my-deployer --interactive
-
-# Deploy using the account
-forge script script/IntentSourceVault.s.sol:DeployVault --chain polkadot-testnet --account my-deployer --sender <YOUR_ADDRESS> --broadcast --verify
+# Verify PVM Logic
+cd pvm
+cargo test --target x86_64-apple-darwin
 ```
 
 ---
 
 ## License
 
-MIT License. Created for the Polkadot Intent-Based Solver Track.
+MIT License. Built for the Polkadot Hackathon.

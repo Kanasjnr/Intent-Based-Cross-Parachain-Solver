@@ -1,0 +1,16 @@
+# Build Artifacts
+contracts/out/
+contracts/cache/
+contracts/pvm/target/
+**/intent-verifier.polkavm
+
+# Dependencies
+contracts/lib/
+!contracts/lib/.gitkeep
+contracts/node_modules/
+
+# Environment & Secrets
+.env
+*.key
+*.pem
+

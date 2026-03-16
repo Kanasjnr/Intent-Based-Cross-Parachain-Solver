@@ -1,0 +1,21 @@
+[package]
+name = "intent-verifier-pvm"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "intent-verifier"
+path = "src/lib.rs"
+
+[dependencies]
+pallet-revive-uapi = { version = "0.10.1", default-features = false }
+polkavm-derive = "0.30.0"
+sha3 = { version = "0.10", default-features = false }
+parity-scale-codec = { version = "3.6.1", default-features = false }
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "s"
+strip = false
+codegen-units = 1
