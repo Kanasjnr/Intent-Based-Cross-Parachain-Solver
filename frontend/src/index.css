@@ -1,0 +1,41 @@
+/* Reset & Base — Tailwind utility classes are applied via the CDN in index.html */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #09090b;
+  color: #a1a1aa;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 4px;
+}
