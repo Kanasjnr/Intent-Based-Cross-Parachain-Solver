@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import * as dotenv from "dotenv";
+import * as http from "http";
 import vaultJson from "./abi.json";
 
 dotenv.config();
@@ -152,6 +153,15 @@ async function main() {
 
   // Start the polling loop
   poll();
+
+  // Health Check Server for Render Web Service compatibility
+  const PORT = process.env.PORT || 10000;
+  http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Zenith Solver Active\n');
+  }).listen(PORT, () => {
+    console.log(`Health check server listening on port ${PORT}`);
+  });
 
   // Keep process alive
   process.stdin.resume();
