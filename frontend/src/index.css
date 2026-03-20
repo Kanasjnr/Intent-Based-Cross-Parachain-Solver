@@ -1,41 +1,83 @@
-/* Reset & Base — Tailwind utility classes are applied via the CDN in index.html */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&family=Inter:wght@400;500;700&display=swap');
+
+:root {
+  --zenith-bg: #0c0c0e;
+  --zenith-card: #141417;
+  --zenith-border: #27272a;
+  --zenith-border-strong: #3f3f46;
+  --zenith-cyan: #00f5ff;
+  --zenith-violet: #8b5cf6;
+  --zenith-emerald: #10b981;
+  --zenith-text: #e4e4e7;
+  --zenith-text-dim: #71717a;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
-}
-
 body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background-color: #09090b;
-  color: #a1a1aa;
-  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--zenith-bg);
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(139, 92, 246, 0.05) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(0, 245, 255, 0.05) 0%, transparent 50%),
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+  color: var(--zenith-text);
+  font-family: 'Outfit', 'Inter', sans-serif;
+  letter-spacing: -0.01em;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
+/* Neo-Brutalist Components */
+.brutalist-card {
+  background: var(--zenith-card);
+  border: 1px solid var(--zenith-border);
+  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-input[type=number] {
-  -moz-appearance: textfield;
+.brutalist-card:hover {
+  border-color: var(--zenith-border-strong);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.5);
 }
 
+.brutalist-button {
+  background: var(--zenith-cyan);
+  color: #000;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0px #000;
+  transition: all 0.1s active;
+}
+
+.brutalist-button:active {
+  transform: translate(2px, 2px);
+  box-shadow: 0px 0px 0px #000;
+}
+
+.cyan-glow {
+  text-shadow: 0 0 15px rgba(0, 245, 255, 0.4);
+}
+
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 4px;
+  width: 5px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #18181b;
+  background: var(--zenith-bg);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 4px;
+  background: var(--zenith-border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--zenith-border-strong);
 }

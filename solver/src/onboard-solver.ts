@@ -15,22 +15,9 @@ async function main() {
   const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
   const vault = new ethers.Contract(VAULT_ADDRESS, vaultJson.abi, wallet);
 
-  console.log(`Solver Address: ${wallet.address}`);
-
-  // 1. Whitelist the solver (Done by Owner)
-  // In our case, the SOLVER_PRIVATE_KEY is the owner key.
-  const isWhitelisted = await vault.whitelistedSolvers(wallet.address);
-  if (!isWhitelisted) {
-    console.log("✍️ Whitelisting solver...");
-    const tx = await vault.setSolverWhitelist(wallet.address, true);
-    await tx.wait();
-    console.log("✅ Solver whitelisted!");
-  } else {
-    console.log("ℹ️ Solver already whitelisted.");
-  }
-
-  // 2. Deposit Bond
+  // 1. Check if solver has enough bond
   const currentBond = await vault.solverBonds(wallet.address);
+  console.log(`Current Bond: ${ethers.formatEther(currentBond)} $PBT`);
   console.log(`Current Bond: ${ethers.formatEther(currentBond)} $PBT`);
 
   if (currentBond < ethers.parseEther("10")) {
