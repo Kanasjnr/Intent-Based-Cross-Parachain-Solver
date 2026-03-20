@@ -12,7 +12,7 @@ The protocol uses a hybrid model combining the liquidity of the EVM with the ver
 
 ```mermaid
 graph TD
-    User["User (MetaMask)"] --> UI["Zenith Terminal (React)"]
+    User["User "] --> UI["Zenith Terminal "]
     UI --> EVM["IntentExecutor Hub (Solidity)"]
     UI --> Solver["Automated Solver (Node.js)"]
     Solver --> EVM
