@@ -1,0 +1,23 @@
+services:
+  - type: worker
+    name: zenith-solver
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npx ts-node src/listen.ts
+    rootDir: solver
+    envVars:
+      - key: RPC_URL
+        sync: false
+      - key: VAULT_ADDRESS
+        value: "0xc799A5a0d13d66EA168a713f5eF35206fD0839E6"
+      - key: SOLVER_PRIVATE_KEY
+        sync: false
+      - key: VITE_CHAIN_ID
+        value: "420420417"
+      - key: USDT_ADDRESS
+        value: "0x60d574dFD1F688a138E738fF70362E8a8fd092F0"
+      - key: USDC_ADDRESS
+        value: "0xdD46E14Dd7355088DE962CD7aCd6d7358d76A61f"
+      - key: BOND_TOKEN_ADDRESS
+        value: "0x0522663853E9AaD410308f5CC175CF1702a636a4"

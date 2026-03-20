@@ -102,18 +102,23 @@ A "light weight" neo-brutalist interface designed for professional bridge operat
 ## Technical Implementation Details
 
 ### 1. PolkaVM (PVM) Verifier
+
 The verifier is a `no_std` Rust program compiled to RISC-V. It is designed for maximum efficiency:
+
 - **Host-Accelerated Hashing**: Uses `pallet-revive` host functions for `keccak_256` to ensure O(1) hashing operations.
 - **Zero-Heap**: The verifier operates entirely on the stack and a pre-allocated 4KB arena, making it immune to memory fragmentation or exhaustion attacks.
 - **MPT Roots**: Validates Merkle Patricia Trie proofs by verifying the checksum of the proof vector against the expected state root.
 
 ### 2. Mathematical Enforcements
+
 - **90% EMA Guard**: To prevent MEV and user loss during volatility, the PVM verifier enforces a `(a_in * 9000) / 10000` threshold. Settlements failing this check are rejected on-chain.
 - **EIP-712 Compliance**: User intents are structured with typed signatures, ensuring they cannot be replayed or maliciously modified by solvers.
 
 ## Hackathon Track
+
 **Build Path**: Polkadot-Solidity-Hackathon — PolkaVM (PVM) Track.
 **Core Mission**: Demonstrating high-performance, trustless cross-chain intent settlement on the `pallet-revive` infrastructure.
 
 ## License
+
 MIT License. Built with passion for the Polkadot Ecosystem.
