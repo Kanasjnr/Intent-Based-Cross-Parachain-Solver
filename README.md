@@ -1,76 +1,119 @@
-# Polkadot Intent Solver Network
+# Zenith
 
-A modular infrastructure for **intent-based cross-parachain asset settlement** on Polkadot. This protocol combines the agility of Solidity with the high-performance verification of PolkaVM (PVM) to enable trustless, MEV-resistant cross-chain swaps.
+Zenith is a high-performance, intent-based cross-parachain settlement protocol built for the **Polkadot-Solidity-Hackathon (PVM Track)**. It enables trustless asset swaps by leveraging PolkaVM (PVM) for off-chain verification and the HydraDX EMA for MEV-resistant price discovery.
 
----
+## Protocol Vision
 
-## Architecture
+Traditionally, cross-chain bridges rely on slow messaging or centralized oracles. Zenith introduces an **Intent-Based Architecture** where users sign a declarative "Intent" that solvers compete to fulfill. Verification is handled by a custom 64-bit RISC-V program running in PolkaVM, ensuring that every settlement is backed by a cryptographic state proof.
 
-### 1. Hybrid Hub-and-Brain Model
+## System Architecture
 
-- **The Hub (EVM):** `IntentExecutor.sol` acts as the single source of truth for asset custody, user escrows, and solver bonds.
-- **The Brain (PVM):** A 64-bit RISC-V verifier running in PolkaVM. It performs the "heavy lifting" (MPT proofs and price checks) off-chain/cross-VM to minimize gas and maximize security.
+The protocol uses a hybrid model combining the liquidity of the EVM with the verification power of PolkaVM.
 
-### 2. HydraDX EMA Price Guard
+```mermaid
+graph TD
+    User["User (MetaMask)"] --> UI["Zenith Terminal (React)"]
+    UI --> EVM["IntentExecutor Hub (Solidity)"]
+    UI --> Solver["Automated Solver (Node.js)"]
+    Solver --> EVM
+    Solver --> PVM["PolkaVM Verifier (Rust)"]
+    PVM --> Proofs["Merkle Patricia Trie Proof"]
+    PVM --> Oracle["HydraDX EMA Price Oracle"]
+```
 
-- **MEV Protection:** The PVM verifier automatically queries the HydraDX Exponential Moving Average (EMA).
-- **Execution Policy:** Settlement is rejected if the output is less than **90%** of the reference EMA price.
-- **Outcome:** Users get a fair market price by default, even in volatile blocks.
+## Intent Settlement Flow
 
-### 3. Cryptographic Surety (MPT)
+Zenith features a sub-second "Real-time Solver" that monitors the Polkadot Hub for user intents and settles them immediately upon PVM verification.
 
-- **Trustless Logic:** Settlement requires a Merkle Patricia Trie (MPT) proof from the source chain's storage.
-- **Math-First:** The verifier parses the proof vector against a trusted State Root anchored on the EVM hub.
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant Z as Zenith UI
+    participant E as IntentExecutor (EVM)
+    participant S as Solver Node
+    participant V as PolkaVM Verifier
 
----
+    U->>Z: Define Swap (e.g., PAS to USDT)
+    Z->>U: Request EIP-712 Signature
+    U-->>Z: Signed Intent Received
+    Z->>E: lockIntent(Intent, Signature)
+    E-->>S: Emit IntentLocked Event
+    S->>V: Verify Proof (MPT + HydraDX Oracle)
+    V-->>S: Verification [PASSED]
+    S->>E: settleIntent(Intent, Proof)
+    E-->>U: Assets Disbursed on Destination
+```
+
+## Key Components
+
+### 1. IntentExecutor (Solidity)
+
+The singleton registry on the Polkadot Hub (pallet-revive). It manages asset custody, user escrows, solver bonds, and enforces the final settlement logic.
+
+### 2. PolkaVM Verifier (Rust)
+
+A dedicated RISC-V program that performs:
+
+- **MPT Verification**: Validates Merkle Patricia Trie proofs against trusted state roots.
+- **HydraDX Price Guard**: Queries the HydraDX Exponential Moving Average (EMA) price to ensure the intent's execution price is within safe slippage bounds (90%).
+
+### 3. Automated Solver (Node.js)
+
+A real-time listener that uses Ethers.js event subscriptions for 0-latency intent detection. It automatically generates proofs and submits settlements to the Hub.
+
+### 4. Zenith UI (React)
+
+A "light weight" neo-brutalist interface designed for professional bridge operators. It includes a built-in Token Faucet for testnet liquidity and real-time simulation health monitoring.
 
 ## Live Deployment (Testnet)
 
-- **Network:** Polkadot Hub Testnet (pallet-revive)
-- **Chain ID:** `420420417`
-- **EVM Executor:** [`0xc799A5a0d13d66EA168a713f5eF35206fD0839E6`](https://blockscout-testnet.polkadot.io/address/0xc799A5a0d13d66EA168a713f5eF35206fD0839E6)
-- **PVM Verifier:** [`0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA`](https://blockscout-testnet.polkadot.io/address/0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA)
-- **Token Factory:** `0x8DE75d04247Cd0707C239F5cBA9B01A5aeC65944`
-- **Mock DEX:** `0xD82eE7805A0180e22C7c827614D5e4089BDF01c4`
-- **Bond Token ($PBT):** `0x0522663853E9AaD410308f5CC175CF1702a636a4`
-
----
-
-## Components
-
-- **`contracts/src/IntentExecutor.sol`**: Singleton registry for intent settlement.
-- **`contracts/src/TokenFactory.sol`**: Permissionless asset creator for the solver network.
-- **`contracts/pvm/src/lib.rs`**: High-performance Rust verifier (no_std, 0-heap).
-- **`solver/`**: EIP-712 intent creation and solver listeners.
+- **Network**: Polkadot Hub Testnet
+- **Chain ID**: 420420417
+- **Intent Hub**: 0xc799A5a0d13d66EA168a713f5eF35206fD0839E6
+- **PVM Verifier**: 0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA
+- **State Explorer**: [explorer.polkadothub.io](https://explorer.polkadothub.io)
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Foundry Nightly**: For `pallet-revive` and Polkadot Hub support.
-- **Rust Nightly**: For PVM compilation with `build-std`.
+- Foundry (Nightly)
+- Node.js v18+
+- Rust Nightly (for PVM compilation)
 
 ### Installation
 
-```bash
-git clone https://github.com/Kanasjnr/Intent-Based-Cross-Parachain-Solver
-cd intent/contracts
-forge install
-```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Kanasjnr/Intent-Based-Cross-Parachain-Solver
+   ```
+2. Setup Frontend:
+   ```bash
+   cd frontend && npm install
+   npm run dev
+   ```
+3. Setup Solver:
+   ```bash
+   cd solver && npm install
+   cp .env.example .env # Configure your private key
+   npx ts-node src/listen.ts
+   ```
 
-### Testing
+## Technical Implementation Details
 
-```bash
-# Verify EVM Hub
-forge test
+### 1. PolkaVM (PVM) Verifier
+The verifier is a `no_std` Rust program compiled to RISC-V. It is designed for maximum efficiency:
+- **Host-Accelerated Hashing**: Uses `pallet-revive` host functions for `keccak_256` to ensure O(1) hashing operations.
+- **Zero-Heap**: The verifier operates entirely on the stack and a pre-allocated 4KB arena, making it immune to memory fragmentation or exhaustion attacks.
+- **MPT Roots**: Validates Merkle Patricia Trie proofs by verifying the checksum of the proof vector against the expected state root.
 
-# Verify PVM Logic
-cd pvm
-cargo test --target x86_64-apple-darwin
-```
+### 2. Mathematical Enforcements
+- **90% EMA Guard**: To prevent MEV and user loss during volatility, the PVM verifier enforces a `(a_in * 9000) / 10000` threshold. Settlements failing this check are rejected on-chain.
+- **EIP-712 Compliance**: User intents are structured with typed signatures, ensuring they cannot be replayed or maliciously modified by solvers.
 
----
+## Hackathon Track
+**Build Path**: Polkadot-Solidity-Hackathon — PolkaVM (PVM) Track.
+**Core Mission**: Demonstrating high-performance, trustless cross-chain intent settlement on the `pallet-revive` infrastructure.
 
 ## License
-
-MIT License. Built for the Polkadot Hackathon.
+MIT License. Built with passion for the Polkadot Ecosystem.

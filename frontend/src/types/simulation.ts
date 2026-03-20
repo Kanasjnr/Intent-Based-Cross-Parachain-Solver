@@ -1,1 +1,1 @@
-export type SimulationStatus = "idle" | "signing" | "verifying" | "success";
+export type SimulationStatus = "idle" | "approving" | "signing" | "verifying" | "success";

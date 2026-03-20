@@ -6,6 +6,7 @@
     "listen": "ts-node src/listen.ts",
     "create-intent": "ts-node src/create-intent.ts",
     "onboard": "ts-node src/onboard-solver.ts",
+    "mint-stablecoins": "ts-node src/mint-stablecoins.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
