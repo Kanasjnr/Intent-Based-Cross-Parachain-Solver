@@ -1,17 +1,8 @@
-import React, { useState } from 'react';
-import { X, Loader2, Droplets, ExternalLink, ShieldCheck } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { ethers } from 'ethers';
-
-const MINT_ABI = [
-    "function mint(address to, uint256 amount) public",
-];
-
-const ASSETS = [
-    { name: 'Tether USD', symbol: 'USDT', address: '0x60d574dFD1F688a138E738fF70362E8a8fd092F0', color: 'bg-emerald-500' },
-    { name: 'USD Coin', symbol: 'USDC', address: '0xdD46E14Dd7355088DE962CD7aCd6d7358d76A61f', color: 'bg-blue-500' },
-    { name: 'Polkadot Asset', symbol: 'PAS', address: '0x0000000000000000000000000000000000000000', color: 'bg-teal-500' }
-];
+import React, { useState, useEffect } from 'react';
+import { X, Droplets, ExternalLink, ShieldCheck } from 'lucide-react';
+import { FAUCET_ASSETS, EXPLORER_URL } from '../constants/faucet';
+import { useFaucet } from '../hooks/useFaucet';
+import { Loader2 } from 'lucide-react';
 
 interface Props {
     isOpen: boolean;
@@ -20,46 +11,16 @@ interface Props {
 }
 
 export const MintModal: React.FC<Props> = ({ isOpen, onClose, account }) => {
-    const [loading, setLoading] = useState<string | null>(null);
     const [recipientAddress, setRecipientAddress] = useState<string>(account || '');
+    const { mint, loading } = useFaucet();
+
+    useEffect(() => {
+        if (account && !recipientAddress) {
+            setRecipientAddress(account);
+        }
+    }, [account, recipientAddress]);
 
     if (!isOpen) return null;
-
-    const handleMint = async (asset: typeof ASSETS[0]) => {
-        if (!recipientAddress) {
-            toast.error("Please provide a recipient address");
-            return;
-        }
-
-        let validatedAddress = "";
-        try {
-            validatedAddress = ethers.utils.getAddress(recipientAddress);
-        } catch (e) {
-            toast.error("Invalid Ethereum address format");
-            return;
-        }
-
-        setLoading(asset.symbol);
-        try {
-            const provider = new ethers.providers.Web3Provider((window as any).ethereum);
-            const signer = provider.getSigner();
-
-            if (asset.symbol === 'PAS') {
-                toast.info("PAS tokens can be requested from the Polkadot Hub Testnet Faucet");
-                window.open("https://faucet.polkadot.io/", "_blank");
-            } else {
-                const contract = new ethers.Contract(asset.address, MINT_ABI, signer);
-                const tx = await contract.mint(validatedAddress, ethers.utils.parseUnits("1000", 18));
-                toast.info(`Minting 1000 ${asset.symbol} to ${validatedAddress.slice(0, 6)}...`);
-                await tx.wait();
-                toast.success(`Successfully minted 1000 ${asset.symbol}!`);
-            }
-        } catch (err: any) {
-            toast.error(err.reason || "Minting failed. Make sure you have PAS for gas.");
-        } finally {
-            setLoading(null);
-        }
-    };
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -101,10 +62,10 @@ export const MintModal: React.FC<Props> = ({ isOpen, onClose, account }) => {
 
                     {/* Asset Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {ASSETS.map((asset) => (
+                        {FAUCET_ASSETS.map((asset) => (
                             <button
                                 key={asset.symbol}
-                                onClick={() => handleMint(asset)}
+                                onClick={() => mint(asset, recipientAddress)}
                                 disabled={!!loading}
                                 className="brutalist-card bg-zinc-800/50 p-6 flex flex-col items-center gap-4 hover:bg-zinc-800 transition-all border-2 border-zinc-800 hover:border-cyan-400 group relative shadow-[4px_4px_0px_#000] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
                             >
@@ -134,7 +95,7 @@ export const MintModal: React.FC<Props> = ({ isOpen, onClose, account }) => {
                 </div>
 
                 <div className="px-8 py-4 bg-zinc-950 flex items-center justify-between border-t border-black">
-                     <a href="https://explorer.polkadothub.io" target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase hover:text-cyan-400 transition-colors">
+                     <a href={EXPLORER_URL} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase hover:text-cyan-400 transition-colors">
                         <ExternalLink className="w-3 h-3" /> Explorer
                      </a>
                      <div className="text-[10px] font-black text-zinc-500 tracking-tighter">ZENITH_PVM_FAUCET_v2.0</div>

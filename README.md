@@ -71,7 +71,7 @@ A "light weight" neo-brutalist interface designed for professional bridge operat
 - **Chain ID**: 420420417
 - **Intent Hub**: 0xc799A5a0d13d66EA168a713f5eF35206fD0839E6
 - **PVM Verifier**: 0x8f874cA1f141AC619F2aC4698a6A171b96E5CFaA
-- **State Explorer**: [explorer.polkadothub.io](https://explorer.polkadothub.io)
+- **State Explorer**: [blockscout-testnet.polkadot.io](https://blockscout-testnet.polkadot.io)
 
 ## Getting Started
 
