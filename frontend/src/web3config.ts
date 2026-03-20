@@ -19,7 +19,7 @@ export const polkadotHub = defineChain({
     default: { http: [import.meta.env.VITE_RPC_URL] },
   },
   blockExplorers: {
-    default: { name: "Explorer", url: "https://explorer.polkadothub.io" },
+    default: { name: "Explorer", url: "https://blockscout-testnet.polkadot.io" },
   },
 });
 

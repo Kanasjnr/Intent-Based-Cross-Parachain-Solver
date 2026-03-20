@@ -118,7 +118,9 @@ export const IntentWidget: React.FC<Props> = ({
                 activeProvider,
                 onStatusChange
             );
-            toast.success("Intent locked on-chain!");
+            toast.success(`Intent locked on-chain! Hash: ${hash.slice(0, 10)}...`, {
+                onClick: () => window.open(`https://blockscout-testnet.polkadot.io/tx/${hash}`, '_blank')
+            });
             onTxSuccess(hash, {
                 sourceSymbol: sourceAsset.symbol,
                 destSymbol: destAsset.symbol,

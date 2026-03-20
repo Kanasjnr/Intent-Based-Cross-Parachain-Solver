@@ -39,7 +39,7 @@ export const ensureCorrectNetwork = async (walletProvider: any) => {
                 chainName: "Polkadot Hub Testnet",
                 rpcUrls: [import.meta.env.VITE_RPC_URL],
                 nativeCurrency: { name: "PAS", symbol: "PAS", decimals: 18 },
-                blockExplorerUrls: ["https://explorer.polkadothub.io"],
+                blockExplorerUrls: ["https://blockscout-testnet.polkadot.io"],
               },
             ],
           });

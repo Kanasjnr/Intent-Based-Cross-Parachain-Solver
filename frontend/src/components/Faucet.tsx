@@ -1,71 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Droplets, Zap, Loader2, ExternalLink } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { ethers } from 'ethers';
-
-// Minimal ABI for minting
-const MINT_ABI = [
-    "function mint(address to, uint256 amount) public",
-    "function deposit() public payable", // For wrap/mint of native
-];
-
-const ASSETS = [
-    { name: 'Tether USD', symbol: 'USDT', address: '0x60D574dfD1f688a138E738FF70362E8a8FD092f0', color: 'bg-emerald-500' },
-    { name: 'USD Coin', symbol: 'USDC', address: '0x3278564fFE60219c05459f23Be8b3FC39A689f92', color: 'bg-blue-500' },
-    { name: 'Polkadot Asset', symbol: 'PAS', address: '0x0000000000000000000000000000000000000000', color: 'bg-pink-600' }
-];
+import { FAUCET_ASSETS, EXPLORER_URL } from '../constants/faucet';
+import { useFaucet } from '../hooks/useFaucet';
 
 interface Props {
     account: string | null;
 }
 
 export const Faucet: React.FC<Props> = ({ account }) => {
-    const [loading, setLoading] = useState<string | null>(null);
     const [recipientAddress, setRecipientAddress] = useState<string>(account || '');
+    const { mint, loading } = useFaucet();
 
-    // Sync recipient address when account changes if it's empty
-    React.useEffect(() => {
+    useEffect(() => {
         if (account && !recipientAddress) {
             setRecipientAddress(account);
         }
-    }, [account]);
-
-    const handleMint = async (asset: typeof ASSETS[0]) => {
-        if (!recipientAddress) {
-            toast.error("Please provide a recipient address");
-            return;
-        }
-
-        let validatedAddress = "";
-        try {
-            validatedAddress = ethers.utils.getAddress(recipientAddress);
-        } catch (e) {
-            toast.error("Invalid Ethereum address format");
-            return;
-        }
-
-        setLoading(asset.symbol);
-        try {
-            const provider = new ethers.providers.Web3Provider((window as any).ethereum);
-            const signer = provider.getSigner();
-
-            if (asset.symbol === 'PAS') {
-                toast.info("PAS tokens can be requested from the Polkadot Hub Testnet Faucet");
-                window.open("https://faucet.polkadot.io/", "_blank");
-            } else {
-                const contract = new ethers.Contract(asset.address, MINT_ABI, signer);
-                const tx = await contract.mint(validatedAddress, ethers.utils.parseUnits("1000", 18));
-                toast.info(`Minting 1000 ${asset.symbol} to ${validatedAddress.slice(0, 6)}...`);
-                await tx.wait();
-                toast.success(`Successfully minted 1000 ${asset.symbol}!`);
-            }
-        } catch (err: any) {
-            console.error(err);
-            toast.error(err.reason || "Minting failed. Make sure you have PAS for gas.");
-        } finally {
-            setLoading(null);
-        }
-    };
+    }, [account, recipientAddress]);
 
     return (
         <div className="max-w-5xl mx-auto space-y-10">
@@ -96,7 +46,7 @@ export const Faucet: React.FC<Props> = ({ account }) => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {ASSETS.map((asset) => (
+                    {FAUCET_ASSETS.map((asset) => (
                         <div key={asset.symbol} className="brutalist-card bg-zinc-800/50 p-8 flex flex-col justify-between hover:bg-zinc-800 transition-all border-2 border-zinc-800 shadow-[6px_6px_0px_#000]">
                             <div className="mb-6">
                                 <div className={`w-12 h-12 rounded shadow-lg mb-4 flex items-center justify-center text-white font-bold text-xl ${asset.color}`}>
@@ -107,7 +57,7 @@ export const Faucet: React.FC<Props> = ({ account }) => {
                             </div>
 
                             <button
-                                onClick={() => handleMint(asset)}
+                                onClick={() => mint(asset, recipientAddress)}
                                 disabled={!!loading}
                                 className={`w-full py-4 rounded font-black uppercase text-sm tracking-widest transition-all ${
                                     loading === asset.symbol 
@@ -142,7 +92,7 @@ export const Faucet: React.FC<Props> = ({ account }) => {
                 <div className="brutalist-card p-8 bg-zinc-900 border-l-8 border-l-cyan-500 shadow-xl">
                     <h4 className="text-sm font-black text-cyan-500 uppercase tracking-widest mb-4 italic">Resources</h4>
                     <div className="space-y-4">
-                        <a href="https://blockscout-testnet.polkadot.io/" target="_blank" rel="noreferrer" className="flex items-center gap-3 text-sm text-zinc-400 hover:text-cyan-400 transition-colors font-bold uppercase tracking-wider">
+                        <a href={EXPLORER_URL} target="_blank" rel="noreferrer" className="flex items-center gap-3 text-sm text-zinc-400 hover:text-cyan-400 transition-colors font-bold uppercase tracking-wider">
                             <ExternalLink className="w-4 h-4" /> Testnet Explorer
                         </a>
                         <a href="#" className="flex items-center gap-3 text-sm text-zinc-400 hover:text-cyan-400 transition-colors font-bold uppercase tracking-wider">
